@@ -63,6 +63,18 @@ class HelperTests(unittest.TestCase):
             "scg-con-round-4-dimir-reanimator-vs-izzet-phoenix.png",
         )
 
+    def test_format_deck_name_keeps_names_at_or_under_eleven_characters_on_one_line(self):
+        self.assertEqual(tg.format_deck_name("Mono-Black"), "Mono-Black")
+        self.assertEqual(tg.format_deck_name("Enchantress"), "Enchantress")
+
+    def test_format_deck_name_breaks_long_names_on_latest_whole_word_before_limit(self):
+        self.assertEqual(tg.format_deck_name("G/W Oath Ponza"), "G/W Oath\nPonza")
+        self.assertEqual(tg.format_deck_name("Dimir Reanimator"), "Dimir\nReanimator")
+        self.assertEqual(tg.format_deck_name("Four Color Control"), "Four Color\nControl")
+
+    def test_format_deck_name_does_not_split_single_long_words(self):
+        self.assertEqual(tg.format_deck_name("Counterbalance"), "Counterbalance")
+
     def test_extract_art_crop_prefers_top_level_image_uri(self):
         card = {
             "name": "Lightning Bolt",
@@ -212,8 +224,8 @@ class GimpRunnerTests(unittest.TestCase):
         self.assertIn("Player 1 Deck Image", script)
         self.assertIn("Player 2 Deck Image", script)
         self.assertIn("Legacy 5K\\nRound 2", script)
-        self.assertIn("Dimir Reanimator", script)
-        self.assertIn("Izzet Phoenix", script)
+        self.assertIn("Dimir\\nReanimator", script)
+        self.assertIn("Izzet\\nPhoenix", script)
         self.assertIn("max(target_width / source_width, target_height / source_height)", script)
         self.assertIn("new_layer.resize(target_width, target_height, offset_x, offset_y)", script)
         self.assertIn("Gimp.file_save", script)
@@ -264,11 +276,30 @@ class GimpRunnerTests(unittest.TestCase):
 
         self.assertIn("TEXT_BOXES = {", script)
         self.assertIn('"Event Title": {"box_layer": "NEPM Summer background"', script)
-        self.assertIn('"Player 1 Deck Name": {"x": 92, "y": 895, "width": 620', script)
-        self.assertIn('"Player 2 Deck Name": {"x": 1180, "y": 895, "width": 650', script)
-        self.assertIn("def fit_text_layer(image, layer, layer_name):", script)
-        self.assertIn("scale = min(1, box_width / text_width, box_height / text_height)", script)
+        self.assertIn('"Player 1 Deck Name": {"center_x": 385, "max_width": 650', script)
+        self.assertIn('"Player 2 Deck Name": {"center_x": 1535, "max_width": 650', script)
+        self.assertIn('"single_line_y": 895', script)
+        self.assertIn('"multi_line_center_y": 945', script)
+        self.assertIn("if box.get(\"center_x\") is not None:", script)
+        self.assertIn("if \"\\n\" in text:", script)
+        self.assertIn("target_x = round(box[\"center_x\"] - (scaled_width / 2))", script)
         self.assertIn("layer.scale(scaled_width, scaled_height, False)", script)
+        self.assertIn("def fit_text_layer(image, layer, layer_name, text):", script)
+        self.assertIn("fit_text_layer(image, layer, layer_name, text)", script)
+
+    def test_build_gimp_batch_script_formats_deck_names_before_setting_markup(self):
+        script = tg.build_gimp_batch_script(
+            template_path="/project/thumbnail-template.xcf",
+            output_path="/project/exports/event-round-deck-vs-deck.png",
+            event_title="Legacy 5K\nRound 2",
+            player_1_deck_name="Dimir Reanimator",
+            player_2_deck_name="G/W Oath Ponza",
+            player_1_art_path="/tmp/player-1.jpg",
+            player_2_art_path="/tmp/player-2.jpg",
+        )
+
+        self.assertIn("PLAYER_1_DECK_NAME = 'Dimir\\nReanimator'", script)
+        self.assertIn("PLAYER_2_DECK_NAME = 'G/W Oath\\nPonza'", script)
 
     def test_build_gimp_command_uses_python_batch_interpreter(self):
         command = tg.build_gimp_command("/opt/homebrew/bin/gimp", "/tmp/batch.py")

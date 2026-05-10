@@ -60,6 +60,29 @@ def build_export_filename(event_name: str, round_name: str, deck_1_name: str, de
     return "-".join(parts) + ".png"
 
 
+def format_deck_name(deck_name: str, max_line_length: int = 11) -> str:
+    normalized = " ".join(deck_name.split())
+    if len(normalized) <= max_line_length:
+        return normalized
+
+    words = normalized.split(" ")
+    if len(words) == 1:
+        return normalized
+
+    split_after = None
+    for index in range(1, len(words)):
+        first_line = " ".join(words[:index])
+        if len(first_line) <= max_line_length:
+            split_after = index
+        else:
+            break
+
+    if split_after is None:
+        split_after = 1
+
+    return " ".join(words[:split_after]) + "\n" + " ".join(words[split_after:])
+
+
 def extract_art_crop_uri(card: dict) -> str | None:
     image_uris = card.get("image_uris") or {}
     if image_uris.get("art_crop"):
@@ -177,8 +200,8 @@ def build_gimp_batch_script(
         "template_path": template_path,
         "output_path": output_path,
         "event_title": event_title,
-        "player_1_deck_name": player_1_deck_name,
-        "player_2_deck_name": player_2_deck_name,
+        "player_1_deck_name": format_deck_name(player_1_deck_name),
+        "player_2_deck_name": format_deck_name(player_2_deck_name),
         "player_1_art_path": player_1_art_path,
         "player_2_art_path": player_2_art_path,
     }
@@ -197,8 +220,8 @@ PLAYER_2_ART_PATH = {values["player_2_art_path"]!r}
 
 TEXT_BOXES = {{
     "Event Title": {{"box_layer": "NEPM Summer background", "padding_x": 32, "padding_y": 0, "align": "center"}},
-    "Player 1 Deck Name": {{"x": 92, "y": 895, "width": 620, "height": 121, "align": "left"}},
-    "Player 2 Deck Name": {{"x": 1180, "y": 895, "width": 650, "height": 121, "align": "right"}},
+    "Player 1 Deck Name": {{"center_x": 385, "max_width": 650, "single_line_y": 895, "multi_line_center_y": 945}},
+    "Player 2 Deck Name": {{"center_x": 1535, "max_width": 650, "single_line_y": 895, "multi_line_center_y": 945}},
 }}
 TEXT_FONT = "Beleren Small Caps Bold"
 
@@ -269,6 +292,9 @@ def layer_box(layer):
 
 def text_box(image, layer, layer_name):
     box = TEXT_BOXES.get(layer_name, {{}})
+    if box.get("center_x") is not None:
+        return None
+
     if box.get("box_layer"):
         x, y, width, height = layer_box(find_layer(image, box["box_layer"]))
     else:
@@ -290,26 +316,37 @@ def text_box(image, layer, layer_name):
     )
 
 
-def fit_text_layer(image, layer, layer_name):
-    box_x, box_y, box_width, box_height, align = text_box(image, layer, layer_name)
+def fit_text_layer(image, layer, layer_name, text):
+    box = TEXT_BOXES.get(layer_name, {{}})
     text_width = layer.get_width()
     text_height = layer.get_height()
     if text_width <= 0 or text_height <= 0:
         fail("Text layer has invalid dimensions after update: " + layer_name)
 
-    scale = min(1, box_width / text_width, box_height / text_height)
+    if box.get("center_x") is not None:
+        scale = min(1, box["max_width"] / text_width)
+    else:
+        box_x, box_y, box_width, box_height, align = text_box(image, layer, layer_name)
+        scale = min(1, box_width / text_width, box_height / text_height)
     scaled_width = round(text_width * scale)
     scaled_height = round(text_height * scale)
     if scaled_width != text_width or scaled_height != text_height:
         layer.scale(scaled_width, scaled_height, False)
 
-    if align == "center":
-        target_x = round(box_x + ((box_width - scaled_width) / 2))
-    elif align == "right":
-        target_x = round(box_x + box_width - scaled_width)
+    if box.get("center_x") is not None:
+        target_x = round(box["center_x"] - (scaled_width / 2))
+        if "\\n" in text:
+            target_y = round(box["multi_line_center_y"] - (scaled_height / 2))
+        else:
+            target_y = round(box["single_line_y"])
     else:
-        target_x = round(box_x)
-    target_y = round(box_y + ((box_height - scaled_height) / 2))
+        if align == "center":
+            target_x = round(box_x + ((box_width - scaled_width) / 2))
+        elif align == "right":
+            target_x = round(box_x + box_width - scaled_width)
+        else:
+            target_x = round(box_x)
+        target_y = round(box_y + ((box_height - scaled_height) / 2))
     layer.set_offsets(target_x, target_y)
 
 
@@ -318,7 +355,7 @@ def set_text_layer(image, layer_name, text):
     if not hasattr(layer, "set_text"):
         fail("Required layer is not a text layer: " + layer_name)
     set_text_preserving_markup(layer, text)
-    fit_text_layer(image, layer, layer_name)
+    fit_text_layer(image, layer, layer_name, text)
 
 
 def replace_image_layer(image, layer_name, art_path):
