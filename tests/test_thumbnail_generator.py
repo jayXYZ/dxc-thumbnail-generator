@@ -236,6 +236,21 @@ class GimpRunnerTests(unittest.TestCase):
         self.assertIn("layer.set_markup(replace_markup_text(existing_markup, text))", script)
         self.assertNotIn("display_text = text.upper()", script)
 
+    def test_build_gimp_batch_script_sets_beleren_font_in_markup(self):
+        script = tg.build_gimp_batch_script(
+            template_path="/project/thumbnail-template.xcf",
+            output_path="/project/exports/event-round-deck-vs-deck.png",
+            event_title="Legacy 5K\nRound 2",
+            player_1_deck_name="Dimir Reanimator",
+            player_2_deck_name="Izzet Phoenix",
+            player_1_art_path="/tmp/player-1.jpg",
+            player_2_art_path="/tmp/player-2.jpg",
+        )
+
+        self.assertIn('TEXT_FONT = "Beleren Small Caps Bold"', script)
+        self.assertIn('element.set("font", TEXT_FONT)', script)
+        self.assertIn("ensure_markup_font(root)", script)
+
     def test_build_gimp_batch_script_fits_styled_text_into_layout_boxes(self):
         script = tg.build_gimp_batch_script(
             template_path="/project/thumbnail-template.xcf",

@@ -200,6 +200,7 @@ TEXT_BOXES = {{
     "Player 1 Deck Name": {{"x": 92, "y": 895, "width": 620, "height": 121, "align": "left"}},
     "Player 2 Deck Name": {{"x": 1180, "y": 895, "width": 650, "height": 121, "align": "right"}},
 }}
+TEXT_FONT = "Beleren Small Caps Bold"
 
 
 def fail(message):
@@ -223,8 +224,17 @@ def find_layer(image, layer_name):
     fail("Required layer not found: " + layer_name)
 
 
+def ensure_markup_font(root):
+    spans = list(root.iter("span"))
+    font_spans = [element for element in spans if "font" in element.attrib]
+    targets = font_spans or spans
+    for element in targets:
+        element.set("font", TEXT_FONT)
+
+
 def replace_markup_text(markup, text):
     root = ET.fromstring(markup)
+    ensure_markup_font(root)
     text_holder = None
     for element in root.iter():
         if element.text:
