@@ -275,7 +275,6 @@ class GimpRunnerTests(unittest.TestCase):
         )
 
         self.assertIn("TEXT_BOXES = {", script)
-        self.assertIn('"Event Title": {"box_layer": "NEPM Summer background"', script)
         self.assertIn('"Player 1 Deck Name": {"center_x": 385, "max_width": 650', script)
         self.assertIn('"Player 2 Deck Name": {"center_x": 1535, "max_width": 650', script)
         self.assertIn('"single_line_y": 895', script)
@@ -286,6 +285,21 @@ class GimpRunnerTests(unittest.TestCase):
         self.assertIn("layer.scale(scaled_width, scaled_height, False)", script)
         self.assertIn("def fit_text_layer(image, layer, layer_name, text):", script)
         self.assertIn("fit_text_layer(image, layer, layer_name, text)", script)
+
+    def test_build_gimp_batch_script_centers_event_title_without_scaling(self):
+        script = tg.build_gimp_batch_script(
+            template_path="/project/thumbnail-template.xcf",
+            output_path="/project/exports/event-round-deck-vs-deck.png",
+            event_title="Legacy 5K\nRound 2",
+            player_1_deck_name="Dimir Reanimator",
+            player_2_deck_name="Izzet Phoenix",
+            player_1_art_path="/tmp/player-1.jpg",
+            player_2_art_path="/tmp/player-2.jpg",
+        )
+
+        self.assertIn('"Event Title": {"center_x": 960, "center_y": 88, "scale": False}', script)
+        self.assertIn("if box.get(\"scale\") is False:", script)
+        self.assertIn("target_y = round(box[\"center_y\"] - (scaled_height / 2))", script)
 
     def test_build_gimp_batch_script_formats_deck_names_before_setting_markup(self):
         script = tg.build_gimp_batch_script(

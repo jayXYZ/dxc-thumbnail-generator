@@ -219,7 +219,7 @@ PLAYER_1_ART_PATH = {values["player_1_art_path"]!r}
 PLAYER_2_ART_PATH = {values["player_2_art_path"]!r}
 
 TEXT_BOXES = {{
-    "Event Title": {{"box_layer": "NEPM Summer background", "padding_x": 32, "padding_y": 0, "align": "center"}},
+    "Event Title": {{"center_x": 960, "center_y": 88, "scale": False}},
     "Player 1 Deck Name": {{"center_x": 385, "max_width": 650, "single_line_y": 895, "multi_line_center_y": 945}},
     "Player 2 Deck Name": {{"center_x": 1535, "max_width": 650, "single_line_y": 895, "multi_line_center_y": 945}},
 }}
@@ -323,7 +323,9 @@ def fit_text_layer(image, layer, layer_name, text):
     if text_width <= 0 or text_height <= 0:
         fail("Text layer has invalid dimensions after update: " + layer_name)
 
-    if box.get("center_x") is not None:
+    if box.get("scale") is False:
+        scale = 1
+    elif box.get("center_x") is not None:
         scale = min(1, box["max_width"] / text_width)
     else:
         box_x, box_y, box_width, box_height, align = text_box(image, layer, layer_name)
@@ -335,7 +337,9 @@ def fit_text_layer(image, layer, layer_name, text):
 
     if box.get("center_x") is not None:
         target_x = round(box["center_x"] - (scaled_width / 2))
-        if "\\n" in text:
+        if box.get("center_y") is not None:
+            target_y = round(box["center_y"] - (scaled_height / 2))
+        elif "\\n" in text:
             target_y = round(box["multi_line_center_y"] - (scaled_height / 2))
         else:
             target_y = round(box["single_line_y"])
