@@ -219,6 +219,42 @@ class GimpRunnerTests(unittest.TestCase):
         self.assertIn("Gimp.file_save", script)
         self.assertIn("/project/exports/event-round-deck-vs-deck.png", script)
 
+    def test_build_gimp_batch_script_replaces_text_inside_existing_markup(self):
+        script = tg.build_gimp_batch_script(
+            template_path="/project/thumbnail-template.xcf",
+            output_path="/project/exports/event-round-deck-vs-deck.png",
+            event_title="Legacy 5K\nRound 2",
+            player_1_deck_name="Dimir Reanimator",
+            player_2_deck_name="Izzet Phoenix",
+            player_1_art_path="/tmp/player-1.jpg",
+            player_2_art_path="/tmp/player-2.jpg",
+        )
+
+        self.assertIn("import xml.etree.ElementTree as ET", script)
+        self.assertIn("def replace_markup_text(markup, text):", script)
+        self.assertIn("existing_markup = layer.get_markup()", script)
+        self.assertIn("layer.set_markup(replace_markup_text(existing_markup, text))", script)
+        self.assertNotIn("display_text = text.upper()", script)
+
+    def test_build_gimp_batch_script_fits_styled_text_into_layout_boxes(self):
+        script = tg.build_gimp_batch_script(
+            template_path="/project/thumbnail-template.xcf",
+            output_path="/project/exports/event-round-deck-vs-deck.png",
+            event_title="Legacy 5K\nRound 2",
+            player_1_deck_name="Dimir Reanimator",
+            player_2_deck_name="Izzet Phoenix",
+            player_1_art_path="/tmp/player-1.jpg",
+            player_2_art_path="/tmp/player-2.jpg",
+        )
+
+        self.assertIn("TEXT_BOXES = {", script)
+        self.assertIn('"Event Title": {"box_layer": "NEPM Summer background"', script)
+        self.assertIn('"Player 1 Deck Name": {"x": 92, "y": 895, "width": 620', script)
+        self.assertIn('"Player 2 Deck Name": {"x": 1180, "y": 895, "width": 650', script)
+        self.assertIn("def fit_text_layer(image, layer, layer_name):", script)
+        self.assertIn("scale = min(1, box_width / text_width, box_height / text_height)", script)
+        self.assertIn("layer.scale(scaled_width, scaled_height, False)", script)
+
     def test_build_gimp_command_uses_python_batch_interpreter(self):
         command = tg.build_gimp_command("/opt/homebrew/bin/gimp", "/tmp/batch.py")
 

@@ -183,6 +183,8 @@ def build_gimp_batch_script(
         "player_2_art_path": player_2_art_path,
     }
     return f"""
+import xml.etree.ElementTree as ET
+
 from gi.repository import Gio
 
 TEMPLATE_PATH = {values["template_path"]!r}
@@ -192,6 +194,12 @@ PLAYER_1_DECK_NAME = {values["player_1_deck_name"]!r}
 PLAYER_2_DECK_NAME = {values["player_2_deck_name"]!r}
 PLAYER_1_ART_PATH = {values["player_1_art_path"]!r}
 PLAYER_2_ART_PATH = {values["player_2_art_path"]!r}
+
+TEXT_BOXES = {{
+    "Event Title": {{"box_layer": "NEPM Summer background", "padding_x": 32, "padding_y": 0, "align": "center"}},
+    "Player 1 Deck Name": {{"x": 92, "y": 895, "width": 620, "height": 121, "align": "left"}},
+    "Player 2 Deck Name": {{"x": 1180, "y": 895, "width": 650, "height": 121, "align": "right"}},
+}}
 
 
 def fail(message):
@@ -215,11 +223,92 @@ def find_layer(image, layer_name):
     fail("Required layer not found: " + layer_name)
 
 
+def replace_markup_text(markup, text):
+    root = ET.fromstring(markup)
+    text_holder = None
+    for element in root.iter():
+        if element.text:
+            text_holder = element
+
+    if text_holder is None:
+        spans = list(root.iter("span"))
+        text_holder = spans[-1] if spans else root
+
+    for element in root.iter():
+        element.text = None
+        element.tail = None
+    text_holder.text = text
+    return ET.tostring(root, encoding="unicode")
+
+
+def set_text_preserving_markup(layer, text):
+    existing_markup = layer.get_markup()
+    if existing_markup:
+        layer.set_markup(replace_markup_text(existing_markup, text))
+        return
+    layer.set_text(text)
+
+
+def layer_box(layer):
+    has_offsets, x, y = layer.get_offsets()
+    if not has_offsets:
+        x = 0
+        y = 0
+    return x, y, layer.get_width(), layer.get_height()
+
+
+def text_box(image, layer, layer_name):
+    box = TEXT_BOXES.get(layer_name, {{}})
+    if box.get("box_layer"):
+        x, y, width, height = layer_box(find_layer(image, box["box_layer"]))
+    else:
+        x = box.get("x")
+        y = box.get("y")
+        width = box.get("width")
+        height = box.get("height")
+        if x is None or y is None or width is None or height is None:
+            x, y, width, height = layer_box(layer)
+
+    padding_x = box.get("padding_x", 0)
+    padding_y = box.get("padding_y", 0)
+    return (
+        x + padding_x,
+        y + padding_y,
+        width - (padding_x * 2),
+        height - (padding_y * 2),
+        box.get("align", "left"),
+    )
+
+
+def fit_text_layer(image, layer, layer_name):
+    box_x, box_y, box_width, box_height, align = text_box(image, layer, layer_name)
+    text_width = layer.get_width()
+    text_height = layer.get_height()
+    if text_width <= 0 or text_height <= 0:
+        fail("Text layer has invalid dimensions after update: " + layer_name)
+
+    scale = min(1, box_width / text_width, box_height / text_height)
+    scaled_width = round(text_width * scale)
+    scaled_height = round(text_height * scale)
+    if scaled_width != text_width or scaled_height != text_height:
+        layer.scale(scaled_width, scaled_height, False)
+
+    if align == "center":
+        target_x = round(box_x + ((box_width - scaled_width) / 2))
+    elif align == "right":
+        target_x = round(box_x + box_width - scaled_width)
+    else:
+        target_x = round(box_x)
+    target_y = round(box_y + ((box_height - scaled_height) / 2))
+    layer.set_offsets(target_x, target_y)
+
+
 def set_text_layer(image, layer_name, text):
     layer = find_layer(image, layer_name)
     if not hasattr(layer, "set_text"):
         fail("Required layer is not a text layer: " + layer_name)
-    layer.set_text(text)
+    set_text_preserving_markup(layer, text)
+    fit_text_layer(image, layer, layer_name)
 
 
 def replace_image_layer(image, layer_name, art_path):
