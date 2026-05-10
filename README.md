@@ -1,4 +1,4 @@
-# DXC Thumbnail Generator
+# DxC Thumbnail Generator
 
 Generate Magic: The Gathering tournament thumbnails from a GIMP template.
 
